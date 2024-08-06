@@ -122,7 +122,7 @@ Also the tree is static and could probably be added to the database and updated 
 
 The historical data from `historical.txt` get loaded into a dataset to be used by the KNN algorithm. Then for each match in `target.txt` a search is made based on euclidean distance for the three possible outcomes, home win, draw or away win
 
-Taking the nearest 11 (yet another magic number, YAMN) results the three outcomes are weighted by their popularity according to how close they were to the match we are trying to predict. The values are normalised to that magic values can change without breaking the heuristics below
+Taking the nearest 11 (yet another magic number, YAMN) results the three outcomes are weighted by their popularity according to how close they were to the match we are trying to predict. The values are normalised so that magic values can change without breaking the heuristics below
 
 Having made a prediction we apply some human *intuition* to throw out the predictions most likely to fail
 
