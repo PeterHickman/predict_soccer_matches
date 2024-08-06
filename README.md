@@ -137,7 +137,7 @@ The result is a very conservative predictor but has a better than 70% success ra
 
 ## Afterword
 
-My first attempt at this was barely better than average so I am happy with how this went. The various magic numbers were pulled out of thin air but seem to work. The next step would be to see what the changing these values would be achieve
+My first attempt at this was barely better than average so I am happy with how this went. The various magic numbers were pulled out of thin air but seem to work. The next step would be to see what changing these values would be achieve
 
 Another project for another day
 
