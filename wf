@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+TS=$1
+
+[ -e historical.txt ] && rm historical.txt
+[ -e target.txt ] && rm target.txt
+[ -e results.csv ] && rm results.csv
+
+./extract ${TS}
+./knn
+./check

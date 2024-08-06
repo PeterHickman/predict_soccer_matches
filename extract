@@ -1,0 +1,152 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'date'
+
+require 'sequel'
+require 'pg'
+
+MATCHES = 19
+MINIMUM = 7
+YEAR = 365
+
+def prior(date, years)
+  d = Date.parse(date) - (years * YEAR)
+  d.strftime('%Y-%m-%d')
+end
+
+def side_playing_values(data, type)
+  h = Hash.new(0)
+
+  f = 1.0 / data.size
+
+  data.each do |x|
+    h[x] += f
+  end
+
+  if type == 'home'
+    [h['home_win'], h['draw'], h['away_win']]
+  else
+    [h['away_win'], h['draw'], h['home_win']]
+  end
+end
+
+def win_lose_values(data, type)
+  h = Hash.new(0)
+
+  f = 1.0 / data.size
+
+  data.each do |x|
+    if type == 'home'
+      if x == 'home_win'
+        h['win'] += f
+      else
+        h['lose'] += f
+      end
+    elsif x == 'away_win'
+      h['win'] += f
+    else
+      h['lose'] += f
+    end
+  end
+
+  [h['win'], h['lose']]
+end
+
+def outcomes(tree, team_id, date, type)
+  tree[team_id][type].select { |k, _| k < date }.sort.reverse.map(&:last)[0...MATCHES]
+end
+
+def table_to_hash(table)
+  h = {}
+  DB["SELECT * FROM #{table}"].each do |row|
+    h[row[:id]] = row
+  end
+  h
+end
+
+target_date = ARGV.shift
+
+if target_date.nil?
+  puts 'Need to supply a date to split the data on'
+  exit 1
+end
+
+start_date = prior(target_date, 3)
+
+DB = Sequel.connect('sqlite://matches.sqlite3')
+
+teams = table_to_hash('teams')
+comps = table_to_hash('competitions')
+
+top_tier_competitions = DB['SELECT id FROM competitions WHERE top_tier = true'].map { |x| x[:id] }
+
+tree = {}
+
+DB['SELECT * FROM matches WHERE start_time < ? AND start_time > ? AND competition_id IN ?', target_date, start_date, top_tier_competitions].each do |match|
+  tree[match[:home_team_id]] = { home: {}, away: {} } unless tree.key?(match[:home_team_id])
+  tree[match[:home_team_id]][:home][match[:start_time].to_s] = match[:outcome]
+
+  tree[match[:away_team_id]] = { home: {}, away: {} } unless tree.key?(match[:away_team_id])
+  tree[match[:away_team_id]][:away][match[:start_time].to_s] = match[:outcome]
+end
+puts tree.size
+puts "[EXTRACT] Extracting matches before #{target_date} into historical.txt"
+
+f = File.open('historical.txt', 'w')
+
+DB['SELECT * FROM matches WHERE start_time < ? AND start_time > ? AND competition_id IN ? ORDER BY start_time', target_date, start_date, top_tier_competitions].each do |match|
+  home_matches = outcomes(tree, match[:home_team_id], match[:start_time].to_s, :home)
+  next if home_matches.size < MINIMUM
+
+  away_matches = outcomes(tree, match[:away_team_id], match[:start_time].to_s, :away)
+  next if away_matches.size < MINIMUM
+
+  ho = win_lose_values(home_matches, 'home')
+  ao = win_lose_values(away_matches, 'away')
+
+  f.puts '---'
+  ho.each do |v|
+    f.puts v
+  end
+  ao.each do |v|
+    f.puts v
+  end
+  f.puts "match_id #{match[:id]}"
+  f.puts "outcome #{match[:outcome]}"
+  f.puts "start_time #{match[:start_time]}"
+  f.puts "home_team #{teams[match[:home_team_id]][:name]}"
+  f.puts "away_team #{teams[match[:away_team_id]][:name]}"
+  f.puts "competition #{comps[match[:competition_id]][:name]}"
+end
+
+f.close
+
+puts "[EXTRACT] Extracting matches on #{target_date} into target.txt"
+
+t = File.open('target.txt', 'w')
+
+DB['SELECT * FROM matches WHERE start_time = ? AND competition_id IN ?', target_date, top_tier_competitions].each do |match|
+  home_matches = DB["SELECT outcome FROM matches WHERE home_team_id = ? AND neutral_venue = 'f' AND start_time < ? ORDER BY start_time DESC LIMIT ?", match[:home_team_id], match[:start_time], MATCHES].map { |i| i[:outcome] }
+  next if home_matches.size < MINIMUM
+
+  away_matches = DB["SELECT outcome FROM matches WHERE away_team_id = ? AND neutral_venue = 'f' AND start_time < ? ORDER BY start_time DESC LIMIT ?", match[:away_team_id], match[:start_time], MATCHES].map { |i| i[:outcome] }
+  next if away_matches.size < MINIMUM
+
+  ho = win_lose_values(home_matches, 'home')
+  ao = win_lose_values(away_matches, 'away')
+
+  t.puts '---'
+  ho.each do |v|
+    t.puts v
+  end
+  ao.each do |v|
+    t.puts v
+  end
+  t.puts "match_id #{match[:id]}"
+  t.puts "start_time #{match[:start_time]}"
+  t.puts "home_team #{teams[match[:home_team_id]][:name]}"
+  t.puts "away_team #{teams[match[:away_team_id]][:name]}"
+  t.puts "competition #{comps[match[:competition_id]][:name]}"
+end
+t.close

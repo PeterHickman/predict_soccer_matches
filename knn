@@ -1,0 +1,313 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+class KNN
+  attr_reader :data
+
+  EUCLIDEAN = 1
+  MANHATTAN = 2
+  HAMMING = 3
+  JACCARD = 4
+  COSINE = 5
+
+  def initialize(filename = nil)
+    @width = nil
+    @data = []
+
+    load(filename) unless filename.nil?
+  end
+
+  def add(values, metadata = {})
+    @width = values.size if @width.nil?
+
+    check('Supplied data', values)
+
+    @data << Value.new(values, metadata)
+  end
+
+  def search(query, method = EUCLIDEAN, results = 5)
+    check('The query', query.values)
+
+    case method
+    when EUCLIDEAN
+      euclidean(query, results)
+    when MANHATTAN
+      manhattan(query, results)
+    when HAMMING
+      hamming(query, results)
+    when JACCARD
+      jaccard(query, results)
+    when COSINE
+      cosine(query, results)
+    end
+  end
+
+  def save(filename)
+    f = File.open(filename, 'w')
+
+    @data.each do |item|
+      f.puts '---'
+
+      item.each_value do |v|
+        f.puts v
+      end
+
+      item.metadata.each do |k, v|
+        f.puts "#{k} #{v}"
+      end
+    end
+
+    f.close
+  end
+
+  private
+
+  def load(filename)
+    raise "Unable to find #{filename}" unless File.exist?(filename)
+
+    @data.clear
+    @width = nil
+
+    v = []
+    m = {}
+    l = 0
+
+    File.open(filename, 'r').each do |line|
+      l += 1
+
+      cmd, args = line.chomp.split(/\s+/, 2)
+
+      if cmd == '---'
+        if v.any?
+          @width = v.size if @width.nil?
+
+          check('Supplied data', v, l)
+
+          @data << Value.new(v.dup, m.dup)
+        end
+
+        v.clear
+        m.clear
+      elsif args.nil?
+        v << cmd.to_f
+      else
+        m[cmd] = args
+      end
+    end
+
+    return unless v.any?
+
+    @width = v.size if @width.nil?
+
+    check('Supplied data', v, l)
+
+    @data << Value.new(v.dup, m.dup)
+  end
+
+  def check(prefix, values, line = nil)
+    return if @width == values.size
+
+    if line.nil?
+      raise "#{prefix} has a width of #{values.size}, the dataset requires a width of #{@width}"
+    else
+      raise "#{prefix} has a width of #{values.size}, the dataset requires a width of #{@width} [#{@filename}:#{line}]"
+    end
+  end
+
+  def euclidean(query, results)
+    r = Results.new(results, query)
+
+    @data.each_with_index do |x, i1|
+      t = 0.0
+      x.values.each_with_index do |v, i2|
+        t += (v - query.values[i2]).abs**2
+      end
+      r << [t.dup**0.5, @data[i1]]
+    end
+
+    r
+  end
+
+  def manhattan(query, results)
+    r = Results.new(results, query)
+
+    @data.each_with_index do |x, i1|
+      t = 0.0
+      x.values.each_with_index do |v, i2|
+        t += (v - query.values[i2]).abs
+      end
+      r << [t.dup, @data[i1]]
+    end
+
+    r
+  end
+
+  def hamming(query, results)
+    r = Results.new(results, query, true)
+
+    @data.each_with_index do |x, i1|
+      t = 0.0
+      x.values.each_with_index do |v, i2|
+        t += 1.0 unless query.values[i2] == v
+      end
+      r << [t.dup, @data[i1]]
+    end
+
+    r
+  end
+
+  def jaccard(query, results)
+    r = Results.new(results, query)
+
+    @data.each_with_index do |x, i1|
+      i = (query.values & x.values).size.to_f
+      u = (query.values | x.values).size.to_f
+
+      t = 1.0 - (i / u)
+
+      r << [t.dup, @data[i1]]
+    end
+
+    r
+  end
+
+  def cosine(query, results)
+    r = Results.new(results, query)
+
+    d = dot(query.values, query.values)**0.5
+
+    @data.each_with_index do |x, i1|
+      t = 1.0 - dot(query.values, x.values) / (d * (dot(x.values, x.values)**0.5))
+
+      r << [t.dup, @data[i1]]
+    end
+
+    r
+  end
+
+  def dot(a, b)
+    a.zip(b).map { |x, y| x * y }.sum.to_f
+  end
+end
+
+class Results
+  attr_reader :size, :query, :reverse, :data
+
+  def initialize(size, query, reverse = false)
+    @size = size
+    @query = query
+    @reverse = reverse
+
+    @data = []
+  end
+
+  def <<(other)
+    if @data.size < @size
+      @data << other
+    elsif @data.last.first > other.first
+      @data[-1] = other
+    else
+      return
+    end
+
+    @data = @reverse ? @data.sort { |a, b| b[0] <=> a[0] } : @data.sort { |a, b| a[0] <=> b[0] }
+  end
+end
+
+class Value
+  attr_reader :values, :metadata
+
+  def initialize(values, metadata)
+    @values = values
+    @metadata = metadata
+  end
+
+  def inspect
+    "{values=#{@values.inspect} metadata=#{@metadata.inspect}}"
+  end
+end
+
+def counted(x)
+  h = Hash.new(0)
+
+  f = 1.0 / x.size
+
+  x.data.each do |y|
+    o = y.last.metadata['outcome']
+    h[o] += f
+  end
+
+  h.to_a.sort { |a, b| b[1] <=> a[1] }
+end
+
+def weighted(x)
+  h = Hash.new(0.0)
+
+  x.data.each do |y|
+    o = y.last.metadata['outcome']
+    h[o] += 1.0 - y.first
+  end
+
+  h.to_a.sort { |a, b| b[1] <=> a[1] }
+end
+
+def normalised_weighted(x)
+  h = Hash.new(0.0)
+
+  x.data.each do |y|
+    o = y.last.metadata['outcome']
+    h[o] += 1.0 - y.first
+  end
+
+  t = h.values.sum
+
+  h.each do |k, v|
+    h[k] = v / t
+  end
+
+  h.to_a.sort { |a, b| b[1] <=> a[1] }
+end
+
+def display(match_id, x)
+  [match_id, *x.map(&:first)].join(',')
+end
+
+h = KNN.new('historical.txt')
+
+q = KNN.new('target.txt')
+
+res = File.open('results.csv', 'w')
+
+predictions = 0
+
+q.data.each do |item|
+  r = h.search(item, KNN::EUCLIDEAN, 11)
+
+  w = normalised_weighted(r)
+
+  # Draws are not really predictable
+  if w.first.first == 'draw'
+    # puts "Rejected: Draw"
+    next
+  end
+
+  # If everything is possible I have no confidence
+  if w.size == 3
+    vs = w.map(&:last)
+    # puts "Rejected: All outcomes #{vs}"
+    next
+  end
+
+  v1, v2 = w.map(&:last)[0..1]
+
+  if v2.nil? || v1 - v2 >= 0.2 # 1.5
+    res.puts display(r.query.metadata['match_id'], w)
+    predictions += 1
+  else
+    # puts "Reject: Gap #{v1 - v2}"
+  end
+end
+
+res.close
+
+puts "[KNN] Of #{q.data.size} matches wrote #{predictions} predictions into results.csv"

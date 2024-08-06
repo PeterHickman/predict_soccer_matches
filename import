@@ -1,0 +1,234 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'sequel'
+require 'pg'
+
+require 'colorize'
+
+class TableAsHash
+  def initialize(db, table)
+    @db = db
+    @table = table
+
+    @data = {}
+
+    load
+  end
+
+  def add(id, name)
+    id2 = id.to_i
+
+    return if @data.key?(id2)
+
+    @data[id2] = name
+    @db[@table].insert(id: id, name: name)
+    puts "    [#{@table}] #{id}=#{name}".green
+  end
+
+  private
+
+  def load
+    @db["SELECT * FROM #{@table}"].each do |row|
+      @data[row[:id]] = row[:name]
+    end
+  end
+end
+
+class TagCompetitions
+  IGNORE = [
+    'Group',
+    'Champions',
+    'Play-off',
+    'Division 2',
+    'Division 3',
+    'Division 4',
+    'League 2',
+    'League 3',
+    'Div 2',
+    'Grp',
+    'Tour',
+    'Youth',
+    'U16',
+    'U17',
+    'U18',
+    'U19',
+    'U20',
+    'U21',
+    'U22',
+    'U23',
+    'Trophy',
+    'Shield',
+    'Friendly',
+    'Regionalliga',
+    'East',
+    'South',
+    'North',
+    'West',
+    'Women',
+    '(old)',
+    '(W)',
+    'COVID',
+    'Qualifying',
+    ' Cup',
+    'Championship',
+    'Challenge',
+    'Primera B',
+    'Girone',
+    'Series/2',
+    'Series/3',
+    'Series/4',
+    'League C',
+    'Reserve',
+    'Oberliga',
+    'League Two',
+    'National',
+    'Serie D',
+    'Pro 2',
+    'Liga 2',
+    'Copa ',
+    'Game',
+    'Segunda',
+    'International',
+    'Kakkonen B',
+    'Kakkonen C'
+  ].freeze
+
+  RAISE = [
+    'Division 1',
+    'Professional',
+    'Serie A',
+    'Pro League',
+    'Spanish La Liga',
+    'Super League',
+    'Premier',
+    'Superleague',
+    'Bundesliga',
+    'Superliga',
+    'Liga Profesional',
+    'Kakkonen A',
+    'League 1',
+    'Primera',
+    'Liga 1',
+    'Series/1',
+    'Primeira Liga',
+    'Pro 1',
+    'League One'
+  ].freeze
+
+  def initialize(db)
+    @db = db
+  end
+
+  def process
+    @db[:competitions].update(top_tier: false)
+
+    unknown_names = []
+
+    @db['SELECT * FROM competitions ORDER BY name'].each do |row|
+      matched_this = false
+
+      IGNORE.each do |pattern|
+        if row[:name].include?(pattern)
+          matched_this = true
+          break
+        end
+      end
+
+      next if matched_this
+
+      matched_this = false
+
+      RAISE.each do |pattern|
+        if row[:name].include?(pattern)
+          matched_this = true
+          break
+        end
+      end
+
+      if matched_this
+        @db[:competitions].where(id: row[:id]).update(top_tier: true)
+        next
+      end
+
+      next if unknown_names.include?(row[:name])
+
+      puts "    #{row[:name]}"
+      unknown_names << row[:name]
+    end
+  end
+end
+
+def from_scores(home_fulltime, away_fulltime)
+  if home_fulltime > away_fulltime
+    'home_win'
+  elsif home_fulltime < away_fulltime
+    'away_win'
+  else
+    'draw'
+  end
+end
+
+DB = Sequel.connect('sqlite://matches.sqlite3')
+
+filename = ARGV.shift
+if filename.nil?
+  puts 'Supply a file with the match data'.red
+  exit 1
+end
+
+unless File.exist?(filename)
+  puts "File [#{filename}] does not exist".red
+  exit 1
+end
+
+read = 0
+wrote = 0
+
+t = TableAsHash.new(DB, :teams)
+c = TableAsHash.new(DB, :competitions)
+
+puts "==> Importing #{filename}".bold
+
+File.open(filename, 'r').each do |line|
+  next unless line.include?(' | ')
+
+  id, home_team_id, home_team_name, away_team_id, away_team_name, competition_id, competition_name, neutral_venue, home_fulltime, away_fulltime, start_time = line.chomp.split('|').map(&:strip)
+
+  next if id == 'id'
+  next unless neutral_venue == 'f'
+
+  read += 1
+
+  t.add(home_team_id, home_team_name)
+  t.add(away_team_id, away_team_name)
+  c.add(competition_id, competition_name)
+
+  existing = DB['SELECT * FROM matches WHERE id = ?', id].first
+  next if existing
+
+  o = from_scores(home_fulltime, away_fulltime)
+  s = start_time.split(/\s+/).first
+
+  attr = {
+    id: id,
+    home_team_id: home_team_id,
+    away_team_id: away_team_id,
+    competition_id: competition_id,
+    neutral_venue: neutral_venue,
+    home_fulltime: home_fulltime,
+    away_fulltime: away_fulltime,
+    outcome: o,
+    start_time: s
+  }
+
+  DB[:matches].insert(attr)
+  wrote += 1
+end
+
+puts "    Read #{read}, wrote #{wrote}"
+
+puts '==> Classifying competitions'.bold
+
+t = TagCompetitions.new(DB)
+t.process

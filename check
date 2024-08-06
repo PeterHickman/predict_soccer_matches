@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'sequel'
+require 'pg'
+
+DB = Sequel.connect('sqlite://matches.sqlite3')
+
+t = 0
+c = 0
+
+File.open('results.csv', 'r').each do |line|
+  match_id, x = line.chomp.split(',', 2)
+  outcomes = x.split(',')
+
+  existing = DB['SELECT * FROM matches WHERE id = ?', match_id].first
+  a = outcomes.index(existing[:outcome])
+
+  t += 1
+
+  if a.nil?
+    puts "[CHECK] match_id:#{match_id} #{outcomes.first} Failed, outcome was #{existing[:outcome]}"
+  elsif a.zero?
+    puts "[CHECK] match_id:#{match_id} #{outcomes.first} Correct!!!"
+    c += 1
+  else
+    puts "[CHECK] match_id:#{match_id} #{outcomes.first} Failed, outcome was #{existing[:outcome]}"
+  end
+end
+
+puts "[CHECK] Correctly predicted #{c} of #{t} matches (#{(c.to_f / t * 100).round(2)}%)"
