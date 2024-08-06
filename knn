@@ -283,26 +283,23 @@ q.data.each do |item|
 
   w = normalised_weighted(r)
 
-  # Draws are not really predictable
   if w.first.first == 'draw'
-    # puts "Rejected: Draw"
+    puts "[KNN] Rejected: match_id:#{r.query.metadata['match_id']} Draw"
     next
   end
 
-  # If everything is possible I have no confidence
   if w.size == 3
-    # vs = w.map(&:last)
-    # puts "Rejected: All outcomes #{vs}"
+    puts "[KNN] Rejected: match_id:#{r.query.metadata['match_id']} All outcomes"
     next
   end
 
   v1, v2 = w.map(&:last)[0..1]
 
-  if v2.nil? || v1 - v2 >= 0.2 # 1.5
+  if v2.nil? || v1 - v2 >= 0.2
     res.puts display(r.query.metadata['match_id'], w)
     predictions += 1
   else
-    # puts "Reject: Gap #{v1 - v2}"
+    puts "[KNN] Rejected: match_id:#{r.query.metadata['match_id']} Gap #{v1 - v2}"
   end
 end
 
