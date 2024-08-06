@@ -149,4 +149,5 @@ DB['SELECT * FROM matches WHERE start_time = ? AND competition_id IN ?', target_
   t.puts "away_team #{teams[match[:away_team_id]][:name]}"
   t.puts "competition #{comps[match[:competition_id]][:name]}"
 end
+
 t.close
