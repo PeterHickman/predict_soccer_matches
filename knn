@@ -107,11 +107,9 @@ class KNN
   def check(prefix, values, line = nil)
     return if @width == values.size
 
-    if line.nil?
-      raise "#{prefix} has a width of #{values.size}, the dataset requires a width of #{@width}"
-    else
-      raise "#{prefix} has a width of #{values.size}, the dataset requires a width of #{@width} [#{@filename}:#{line}]"
-    end
+    raise "#{prefix} has a width of #{values.size}, the dataset requires a width of #{@width}" if line.nil?
+
+    raise "#{prefix} has a width of #{values.size}, the dataset requires a width of #{@width} [#{@filename}:#{line}]"
   end
 
   def euclidean(query, results)
@@ -293,7 +291,7 @@ q.data.each do |item|
 
   # If everything is possible I have no confidence
   if w.size == 3
-    vs = w.map(&:last)
+    # vs = w.map(&:last)
     # puts "Rejected: All outcomes #{vs}"
     next
   end
