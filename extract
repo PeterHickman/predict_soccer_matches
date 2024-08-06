@@ -90,7 +90,7 @@ DB['SELECT * FROM matches WHERE start_time < ? AND start_time > ? AND competitio
   tree[match[:away_team_id]] = { home: {}, away: {} } unless tree.key?(match[:away_team_id])
   tree[match[:away_team_id]][:away][match[:start_time].to_s] = match[:outcome]
 end
-puts tree.size
+
 puts "[EXTRACT] Extracting matches before #{target_date} into historical.txt"
 
 f = File.open('historical.txt', 'w')
