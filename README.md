@@ -92,7 +92,7 @@ Give a date for which to predict matches for we first get a list of the "top tie
      "2024-07-30"=>"home_win"}},
 ```
 
-The we walk over all the matches prior to the date we are trying to predict and write some historical data into `historical.txt`. The format is understood by the next step but is basically
+Then we walk over all the matches prior to the date we are trying to predict and write some historical data into `historical.txt`. The format is understood by the next step but is basically
 
 ```
 ---
