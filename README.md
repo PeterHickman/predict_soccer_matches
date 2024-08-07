@@ -1,6 +1,6 @@
 # Predicting the outcome of soccer matches based on past performance
 
-The objective of this project is to see if it is possible to predict the outcome of soccer matches (home win, draw or away win) based solely on the team's history
+The objective of this project is to see if it is possible to predict the outcome of soccer matches (home win, draw or away win) based solely on the team's history using KNN
 
 The minimum data would be
 
@@ -114,10 +114,6 @@ Any team with less that 7 (another magic number) previous matches are rejected a
 
 The process is then repeated for all the matches that we want to predict as `target.txt`
 
-Note that there is a lot of unnecessary work being done here, there are only 112 matches in our example, so only 224 teams yet we build the tree for all 1,960 teams in the historical data. We could cut down the amount of work being done by only processing matches that teams we are trying to predict played in. But it has not been much of an issue so far
-
-Also the tree is static and could probably be added to the database and updated when new data is added there
-
 ### Predicting `knn`
 
 The historical data from `historical.txt` get loaded into a dataset to be used by the KNN algorithm. Then for each match in `target.txt` a search is made based on euclidean distance for the three possible outcomes, home win, draw or away win
@@ -137,7 +133,5 @@ The result is a very conservative predictor but has a better than 70% success ra
 
 ## Afterword
 
-My first attempt at this was barely better than average so I am happy with how this went. The various magic numbers were pulled out of thin air but seem to work. The next step would be to see what changing these values would achieve
-
-Another project for another day
+My first attempt at this was barely better than average so I am happy with how this went. The various magic numbers were pulled out of thin air but seem to work. The biggest issue is that the "All three outcomes" heuristic is rejecting around 70% of all possible predictions. Feels like there should be some way of being less blunt here. But that will be another project
 
