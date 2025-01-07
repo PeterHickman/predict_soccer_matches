@@ -7,7 +7,8 @@ CREATE TABLE matches (
   home_fulltime  INTEGER NOT NULL,
   away_fulltime  INTEGER NOT NULL,
   outcome        STRING NOT NULL,
-  start_time     DATE NOT NULL
+  start_time     DATE NOT NULL,
+  top_tier       BOOLEAN NULL
 );
 
 CREATE UNIQUE INDEX matches_id ON matches (id);
@@ -20,6 +21,6 @@ CREATE TABLE teams (
 
 CREATE TABLE competitions (
   id          INTEGER NOT NULL,
-  name STRING NOT NULL,
+  name        STRING NOT NULL,
   top_tier    BOOLEAN NULL
 );

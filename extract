@@ -32,27 +32,30 @@ def side_playing_values(data, type)
   end
 end
 
-def win_lose_values(data, type)
+def win_lose_values_weighted(data, type)
   win = 0.0
   lose = 0.0
 
   f = 1.0 / data.size
 
-  data.each do |x|
+  data.each_with_index do |x, i|
+    fraction = 1.0 - (f * i)
+
     if type == 'home'
       if x == 'home_win'
-        win += f
+        win += fraction
       else
-        lose += f
+        lose += fraction
       end
     elsif x == 'away_win'
-      win += f
+      win += fraction
     else
-      lose += f
+      lose += fraction
     end
   end
 
-  [win, lose]
+  t = win + lose
+  [win / t, lose / t]
 end
 
 def outcomes(tree, team_id, date, type)
@@ -97,12 +100,10 @@ DB = Sequel.connect('sqlite://matches.sqlite3')
 teams = table_to_hash('teams')
 comps = table_to_hash('competitions')
 
-top_tier_competitions = DB['SELECT id FROM competitions WHERE top_tier = true'].map { |x| x[:id] }
-
 puts "[EXTRACT] Tree building from #{start_date} to #{target_date}"
 tree = {}
 t1 = Time.now
-DB["SELECT id, home_team_id, away_team_id, start_time, outcome FROM matches WHERE start_time BETWEEN ? AND ? AND competition_id IN ? ORDER BY start_time DESC", start_date, target_date, top_tier_competitions].each do |match|
+DB["SELECT id, home_team_id, away_team_id, start_time, outcome FROM matches WHERE start_time BETWEEN ? AND ? AND top_tier = true ORDER BY start_time DESC", start_date, target_date].each do |match|
   tree[match[:home_team_id]] = { home: [], away: [] } unless tree.key?(match[:home_team_id])
   tree[match[:away_team_id]] = { home: [], away: [] } unless tree.key?(match[:away_team_id])
 
@@ -116,7 +117,7 @@ puts "[EXTRACT] Extracting matches before #{target_date} into historical.txt"
 t1= Time.now
 r = 0
 f = File.open('historical.txt', 'w')
-DB['SELECT * FROM matches WHERE start_time BETWEEN ? AND ? AND competition_id IN ? ORDER BY start_time', start_date, target_date, top_tier_competitions].each do |match|
+DB['SELECT * FROM matches WHERE start_time BETWEEN ? AND ? AND top_tier = true ORDER BY start_time', start_date, target_date].each do |match|
   home_matches = outcomes(tree, match[:home_team_id], match[:start_time].to_s, :home).map(&:outcome)
   next if home_matches.size < MINIMUM
 
@@ -125,8 +126,8 @@ DB['SELECT * FROM matches WHERE start_time BETWEEN ? AND ? AND competition_id IN
 
   r += 1
 
-  ho = win_lose_values(home_matches, 'home')
-  ao = win_lose_values(away_matches, 'away')
+  ho = win_lose_values_weighted(home_matches, 'home')
+  ao = win_lose_values_weighted(away_matches, 'away')
 
   f.puts '---'
   f.puts balance(ho[0], ao[0])
@@ -145,7 +146,7 @@ puts "[EXTRACT] Extracting matches on #{target_date} into target.txt"
 t1 = Time.now
 r = 0
 t = File.open('target.txt', 'w')
-DB['SELECT * FROM matches WHERE start_time = ? AND competition_id IN ?', target_date, top_tier_competitions].each do |match|
+DB['SELECT * FROM matches WHERE start_time = ? AND top_tier = true', target_date].each do |match|
   home_matches = outcomes(tree, match[:home_team_id], match[:start_time].to_s, :home).map(&:outcome)
   next if home_matches.size < MINIMUM
 

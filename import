@@ -219,7 +219,8 @@ File.open(filename, 'r').each do |line|
     home_fulltime: home_fulltime,
     away_fulltime: away_fulltime,
     outcome: o,
-    start_time: s
+    start_time: s,
+    top_tier: false
   }
 
   DB[:matches].insert(attr)
@@ -232,3 +233,16 @@ puts '==> Classifying competitions'.bold
 
 t = TagCompetitions.new(DB)
 t.process
+
+puts '==> Updating matches with competition tier'.bold
+
+DB.run("UPDATE matches SET top_tier = false")
+
+DB["SELECT id FROM competitions WHERE top_tier = true"].each do |row|
+  DB[:matches].where(competition_id: row[:id]).update(top_tier: true)
+end
+
+puts '==> Trim the database'.bold
+
+DB[:matches].where(top_tier: false).delete
+DB.run("VACUUM matches")
